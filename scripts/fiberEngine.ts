@@ -136,20 +136,49 @@ module.exports = {
       );
       let receipt = { code: CODE_701 };
       withdrawResponse = createEVMResponse(receipt);
-      let data: any = {};
-      data.responseCode = withdrawResponse?.responseCode;
-      data.responseMessage = withdrawResponse?.responseMessage;
-      return data;
-    }
-
-    let targetTypeResponse = await convertIntoAssetTypesObjectForTarget(body);
-
-    if (!targetNetwork.isNonEVM) {
-      // ==========================================
-
-      const targetSigner = signer.connect(targetNetwork.provider);
-      const targetTokenContract = new ethers.Contract(
-        await (global as any).commonFunctions.getWrappedNativeTokenAddress(
+      transactionHash = withdrawResponse?.transactionHash;
+    } else {
+      // 1Inch implementation
+      let res = await doCCTPFlow(
+        targetNetwork,
+        body?.cctpMessageBytes,
+        body?.cctpMessageHash,
+        getIsCCTP(body?.isCCTP)
+      );
+      if (res == attestationSignatureError) {
+        return handleWithdrawalErrors(
+          swapTransactionHash,
+          attestationSignatureError,
+          CODE_703
+        );
+      }
+      let callData: any = await getLatestCallData(
+        body?.sourceWalletAddress,
+        targetChainId,
+        targetNetwork?.foundryTokenAddress,
+        await (global as any).commonFunctions.getNativeTokenAddress(
+          targetTokenAddress
+        ),
+        body?.destinationAmountIn,
+        body?.destinationSlippage,
+        targetNetwork?.fiberRouter,
+        destinationWalletAddress
+      );
+      if (!callData) {
+        console.log("i am here");
+        return handleWithdrawalErrors(
+          swapTransactionHash,
+          genericProviderError,
+          CODE_702
+        );
+      }
+      let signatureResponse: any = getSignature(body);
+      let obj: WithdrawSignedAndSwapOneInch =
+        getWithdrawSignedAndSwapOneInchObject(
+          destinationWalletAddress,
+          body?.destinationAmountIn,
+          body?.destinationAmountOut,
+          targetNetwork?.foundryTokenAddress,
           targetTokenAddress,
           targetChainId
         ),

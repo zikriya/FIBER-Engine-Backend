@@ -320,6 +320,147 @@ export const getValueForSwap = (
   }
 };
 
+export const isOutOfGasError = async (
+  error: any,
+  totalGas: any
+): Promise<Boolean> => {
+  try {
+    const gasUsed = error?.receipt?.gasUsed?.toString();
+    if (gasUsed) {
+      console.log("gas used:", gasUsed, "totalGas:", totalGas);
+      let percentage: any = (100 * Number(gasUsed)) / Number(totalGas);
+      percentage = percentage.toFixed(2);
+      console.log(percentage, Number(percentage));
+      if (Number(percentage) > 98) {
+        console.log("isOutOfGasError: true");
+        return true;
+      }
+    }
+  } catch (e) {
+    console.log(e);
+  }
+  return false;
+};
+
+export const doCCTPFlow = async (
+  network: any,
+  messageBytes: string,
+  messageHash: string,
+  isCCTP: boolean
+) => {
+  console.log(
+    "isCCTP",
+    isCCTP,
+    "network.rpcUrl",
+    network.rpcUrl,
+    "chainId",
+    network.chainId
+  );
+  if (!isCCTP) {
+    return "";
+  }
+  let contract: Contract = {
+    rpcUrl: network.rpcUrl,
+    contractAddress: network.cctpmessageTransmitterAddress,
+  };
+  let attestationSignature = await getAttestation(messageHash);
+  console.log("attestationSignature:", attestationSignature);
+  sendSlackNotification(
+    messageHash,
+    "attestationSignature: " + attestationSignature,
+    null
+  );
+  if (!attestationSignature) {
+    return attestationSignatureError;
+  }
+  await doMessageTransmitter(
+    contract,
+    network,
+    messageBytes,
+    attestationSignature
+  );
+};
+
+const doMessageTransmitter = async (
+  contract: any,
+  network: any,
+  messageBytes: string,
+  attestationSignature: string
+) => {
+  for (let count = 0; count < 5; count++) {
+    if (
+      await messageTransmitter(
+        contract,
+        network,
+        messageBytes,
+        attestationSignature
+      )
+    ) {
+      return "";
+    }
+    await delay();
+  }
+};
+
+export const getLatestCallData = async (
+  walletAddress: string,
+  chainId: string,
+  src: any,
+  dst: string,
+  amount: string,
+  slippage: string,
+  from: string,
+  to: string,
+  recursionCount = 0
+) => {
+  let providerResponse: any = await chooseProviderAndGetData(
+    walletAddress,
+    chainId,
+    src,
+    dst,
+    amount,
+    slippage,
+    from,
+    to,
+    true
+  );
+  if (
+    providerResponse?.responseMessage &&
+    providerResponse?.responseMessage == genericProviderError &&
+    recursionCount < (await getProviderApiThreshold())
+  ) {
+    console.log("responseMessage", providerResponse?.responseMessage);
+    await delay();
+    recursionCount = recursionCount + 1;
+    providerResponse = await getLatestCallData(
+      walletAddress,
+      chainId,
+      src,
+      dst,
+      amount,
+      slippage,
+      from,
+      to,
+      recursionCount
+    );
+  }
+  return providerResponse?.callData ? providerResponse?.callData : "";
+};
+
+export const handleWithdrawalErrors = async (
+  swapTransactionHash: string,
+  error: string,
+  code: any
+) => {
+  sendSlackNotification(swapTransactionHash, "Error: " + error, "Not used");
+  let receipt = { code: code };
+  let withdrawResponse = createEVMResponse(receipt);
+  let data: any = {};
+  data.responseCode = withdrawResponse?.responseCode;
+  data.responseMessage = withdrawResponse?.responseMessage;
+  return data;
+};
+
 const getGasLimitTagForSlackNotification = (
   dynamicGasPrice: any,
   gasLimit: any

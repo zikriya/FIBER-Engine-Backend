@@ -9,6 +9,7 @@ interface Response {
 }
 
 export const OneInchSwap = async (
+  walletAddress: string,
   chainId: string,
   src: string,
   dst: string,
@@ -20,7 +21,7 @@ export const OneInchSwap = async (
   let amounts = null;
   let data = null;
   let responseMessage = "";
-
+  let excludedProtocols = await getOneInchExcludedProtocols();
   try {
     let config = {
       headers: {
@@ -31,7 +32,8 @@ export const OneInchSwap = async (
     };
     let url = `https://api.1inch.dev/swap/v5.2/${chainId}/swap?src=${src}&dst=${dst}&amount=${amount}&from=${from}&slippage=${await getSlippage(
       slippage
-    )}&disableEstimate=true&includeProtocols=true&allowPartialFill=true&receiver=${receiver}&compatibility=true`;
+    )}&disableEstimate=true&includeProtocols=true&allowPartialFill=true&receiver=${receiver}&compatibility=true&excludedProtocols=${excludedProtocols}&origin=${walletAddress}`;
+    console.log("url", url);
     let res = await axios.get(url, config);
     if (res?.data?.toAmount) {
       amounts = res?.data?.toAmount;
